@@ -37,7 +37,7 @@
 // TODO ten nonces per task is fairly low. There is probably also a point where
 // increasing it too much will reduce performance. You will need to experiment
 // to find the optimal value.
-#define NONCES_PER_TASK 10 //WHAT DOES THIS MEAN???
+#define NONCES_PER_TASK 1000000
 
 pthread_mutex_t task_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t task_staging = PTHREAD_COND_INITIALIZER;
@@ -74,7 +74,10 @@ double get_time()
     return tv.tv_sec + tv.tv_usec / 1000000.0;
 }
 
-/* TODO documentation */
+/* Function: print-binary32()
+ *
+ * Purpose: to take in a num of type uint32_t and print out the designated number of 0s and 1s (for the difficulty mask).
+ */
 void print_binary32(uint32_t num) 
 {
     int i;
@@ -85,7 +88,10 @@ void print_binary32(uint32_t num)
     }
 }
 
-/* TODO documentation */
+/* Function: mine()
+ *
+ * Purpose: to perform the hash inversion, and find the solution.
+ */
 void *mine(void *arg) //function pointer
 {
 
@@ -100,16 +106,16 @@ void *mine(void *arg) //function pointer
         while (task_pointer == NULL && solution_found == false) 
         {
             /* We will busy wait here until task_pointer is not NULL. */
+            //to avoid busy-waiting, we have to use a conditon variable!
             pthread_cond_wait(&task_ready, &task_mutex);
-            //ADD CONDITION VARIABLES HERE
+            
         }
 
 
         if (solution_found) 
         {
             /* Another thread has found the solution. This thread can exit. */
-            //UNLOCK
-            //SOLUTION IS BEING HELD HERE
+            //UNLOCK BECAUSE THE SOLUTION IS BEING HELD HERE
             pthread_mutex_unlock(&task_mutex); 
             return NULL;
         }
@@ -154,21 +160,18 @@ void *mine(void *arg) //function pointer
 
             /* Check to see if we've found a solution to our block. We perform a
              * bitwise AND operation and check to see if we get the same result
-             * back. */
-            //create a print statement here and lock it here...then signal the main thread
-            
+             * back. */            
                 
             if ((hash_front & difficulty_mask) == hash_front) 
             {
-                pthread_mutex_lock(&task_mutex);
-                solution_found = true;
-                printf("%u\n", info->thread_id);
+                pthread_mutex_lock(&task_mutex); 
+                solution_found = true; //when the solution is found, we need to signal the main thread
                 info->nonce = task_nonces[i];
                 sha1tostring(info->solution_hash, digest);
 
                 pthread_cond_signal(&task_staging); //signaling the main thread
                 
-                pthread_mutex_unlock(&task_mutex); //and unlocking this
+                pthread_mutex_unlock(&task_mutex); //and unlocking 
 
 
                 
@@ -184,20 +187,21 @@ void *mine(void *arg) //function pointer
     return NULL;
 }
 
-uint32_t set_difficulty(int diff) //function given to us in class to set the difficulty level...?
+//setting the difficulty level - returns mask of type uint32_t
+uint32_t set_difficulty(int diff) 
 {
     uint32_t mask = 0;
     
     int i;
     for (i = 0; i < 32-diff; ++i)
     {
-        //how can we set an n'th bit in a number?
+        
         uint32_t position = 1 << i;
         mask =  mask| position;
 
     }
     
-    return mask; //ask about the mask on this 
+    return mask; 
 }
 
 int main(int argc, char *argv[]) 
@@ -213,8 +217,8 @@ int main(int argc, char *argv[])
     // should allow the user to specify anywhere between 1 and 32 bits of zeros.
     //difficulty_mask = 0x000000FF; //commenting this out bc this is the part that hard codes the difficulty to 24 bits.
     printf("Difficulty Mask: ");
-    int diff = atoi(argv[2]);
-    difficulty_mask = set_difficulty(diff);
+    int diff = atoi(argv[2]); //setting the variable diff to the second arg that the user inputs
+    difficulty_mask = set_difficulty(diff); 
     print_binary32(difficulty_mask);
     printf("\n");
 
@@ -253,20 +257,13 @@ int main(int argc, char *argv[])
     
     thread->thread_id = 0; //accessing the "thread_id" variable inside the struct and setting it to zero for each pthread.
     
-    //pthread_create(&thread->thread_handle, NULL, mine, thread); //creating one thread for the serial version
-    //the 'thread' is the struct that contains all the thread routines arguments
-
-    //use pthread create to create the number of threads that the user specifies.
-    //and store them into an array of type 'pthread_t'
-    
     int i; 
     for(i = 0; i < num_threads; ++i) //creates the number of threads that the user specifies
     {
         thread[i].thread_id = i; //HAVE TO UPDATE THE THREAD ID IN HERE
-        pthread_create(&thread[i].thread_handle, NULL, mine, &thread[i]); //creating the threads, and the storing them into a space in the array we just created.
+        pthread_create(&thread[i].thread_handle, NULL, mine, &thread[i]); //creating the threads, and updating the array of structs.
     }
-    //^^^^what is this last argument doing? passing in the thread_info struct
-    //when it passes the thread_info struct as the last argument what does that mean
+
 
     double start_time = get_time();
     uint64_t current_nonce = 0;
@@ -340,9 +337,9 @@ int main(int argc, char *argv[])
     {
         if (strlen(thread[i].solution_hash) > 0) 
             {
-                printf("Solution found by thread %d:\n", thread->thread_id);
-                printf("Nonce: %llu\n", thread->nonce);
-                printf("Hash: %s\n", thread->solution_hash);
+                printf("Solution found by thread %d:\n", thread[i].thread_id);
+                printf("Nonce: %llu\n", thread[i].nonce);
+                printf("Hash: %s\n", thread[i].solution_hash);
             }
     }
 
